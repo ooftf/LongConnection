@@ -1,8 +1,10 @@
 package com.chaitai.socket;
 
 import android.annotation.SuppressLint;
-import android.os.Handler;
 import android.util.Log;
+
+import com.alibaba.android.arouter.facade.service.SerializationService;
+import com.alibaba.android.arouter.launcher.ARouter;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.drafts.Draft_6455;
@@ -39,10 +41,11 @@ public class HiClient implements IHiClient {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
                 Log.e("HiClient", "onOpen");
-                for (String message : postSend) {
+                for (Call message : postOnConnected) {
                     Log.e("HiClient", "send::" + message);
-                    client.send(message);
+                    HiClient.this.send(message);
                 }
+                postOnConnected.clear();
             }
 
             @Override
@@ -51,55 +54,74 @@ public class HiClient implements IHiClient {
                 if (message.equals("pong")) {
                     // todo 服务端心跳
                 } else {
-                    for (Map.Entry<String, Callback> entry : callbackMap.entrySet()) {
-                        if (entry.getKey().equals(message)) {
-                            callbackMap.remove(message);
-                        }
-
+                    BaseResponse response = ARouter.getInstance().navigation(SerializationService.class).parseObject(message, BaseResponse.class);
+                    Call call = callbackMap.get(response.event);
+                    if (call != null) {
+                        call.callback.success(message);
+                        callbackMap.remove(call);
                     }
+
                 }
             }
 
             @Override
             public void onClose(int code, String reason, boolean remote) {
                 Log.e("HiClient", "onClose::" + code + "-" + "reason" + "-" + remote);
+                for (Map.Entry<String, Call> call : callbackMap.entrySet()) {
+                    call.getValue().callback.fail(reason);
+                }
+                callbackMap.clear();
             }
 
             @Override
             public void onError(Exception ex) {
                 Log.e("HiClient", "onError::" + ex.toString());
+                for (Map.Entry<String, Call> call : callbackMap.entrySet()) {
+                    call.getValue().callback.fail(ex.getMessage());
+                }
+                callbackMap.clear();
             }
         };
 
         Observable.interval(10, TimeUnit.SECONDS).subscribe(new Consumer<Long>() {
             @Override
             public void accept(Long aLong) throws Exception {
-                boolean hasObserver = callbackMap.size() > 0 || map.size() > 0;
+                boolean hasObserver = callbackMap.size() > 0 || channel.size() > 0;
                 if (hasObserver) {
-                    if (checkConnection()) {
-                        client.send("ping");
-                    }
+                    client.send("ping");
                 }
             }
         });
     }
 
-    HashMap<String, Callback> map = new HashMap<>();
+    HashMap<String, Callback> channel = new HashMap<>();
 
     @Override
-    public void subscribe(final String key, final Callback callback) {
+    public void subscribe(final BaseRequest key, final Callback callback) {
 
         Completable.complete().subscribeOn(Schedulers.io()).subscribe(new Action() {
             @Override
             public void run() throws Exception {
-                if(checkConnection()){
-                    map.put(key, callback);
-                }else{
-                    callback.fail("connection error");
-                }
+                subscribeBlocking(key, callback);
             }
         });
     }
+
+    public void subscribeBlocking(final BaseRequest request, final Callback callback) {
+        sendBlocking(request, new Callback() {
+            @Override
+            public void success(String message) {
+                channel.put(request.args.get("channel"), callback);
+            }
+
+            @Override
+            public void fail(String message) {
+                callback.fail(message);
+            }
+        });
+
+    }
+
 
     private boolean checkConnection() {
         Log.e("HiClient", "checkConnection" + "  isClosed::" + client.isClosed() + "   client.isOpen()::" + client.isOpen());
@@ -124,34 +146,47 @@ public class HiClient implements IHiClient {
     }
 
     @Override
-    public void unSubscribe(String key) {
+    public void unSubscribe(BaseRequest key) {
 
     }
 
-    Map<String, Callback> callbackMap = new HashMap<>();
+    Map<String, Call> callbackMap = new HashMap<>();
 
     @Override
-    public void send(final String string, final Callback callback) {
+    public void send(final BaseRequest request, final Callback callback) {
         Disposable subscribe = Completable.complete().subscribeOn(Schedulers.io()).subscribe(new Action() {
             @Override
             public void run() throws Exception {
-
-              sendBlocking(string,callback);
+                sendBlocking(request, callback);
             }
         });
     }
 
-    public void sendBlocking(final String string, final Callback callback) {
+    public void send(final Call call) {
+        Disposable subscribe = Completable.complete().subscribeOn(Schedulers.io()).subscribe(new Action() {
+            @Override
+            public void run() throws Exception {
+                sendBlocking(call);
+            }
+        });
+    }
+
+    public void sendBlocking(final BaseRequest request, final Callback callback) {
+        Call call = new Call();
+        call.request = request;
+        call.callback = callback;
+        sendBlocking(call);
+    }
+
+    public void sendBlocking(Call call) {
         if (checkConnection()) {
-            client.send(string);
-            callbackMap.put(string, callback);
+            client.send(call.request.toString());
+            callbackMap.put(call.request.op, call);
         } else {
-            callback.fail("connection error");
+            postOnConnected.add(call);
         }
     }
 
 
-
-    ArrayList<String> postSend = new ArrayList<>();
-
+    ArrayList<Call> postOnConnected = new ArrayList<>();
 }

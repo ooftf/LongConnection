@@ -8,10 +8,10 @@ import android.os.Handler;
  * @date 2019/11/7
  */
 public interface IHiClient {
-    void subscribe(String key, Callback callback);
+    void subscribe(BaseRequest key, Callback callback);
 
-    void unSubscribe(String key);
+    void unSubscribe(BaseRequest key);
 
-    void send(String string, Callback callback);
+    void send(BaseRequest request, Callback callback);
 
 }
