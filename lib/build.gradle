@@ -1,5 +1,5 @@
 apply plugin: 'com.android.library'
-
+apply plugin: 'maven'
 android {
     compileSdkVersion 29
     buildToolsVersion "29.0.0"
@@ -34,4 +34,28 @@ dependencies {
     api 'org.java-websocket:Java-WebSocket:1.4.0'
     api 'io.reactivex.rxjava2:rxjava:2.2.3'
     api 'com.alibaba:arouter-api:1.5.0'
+}
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            configuration = configurations.archives
+            snapshotRepository(url: 'https://repo.rdc.aliyun.com/repository/78416-snapshot-YPE3KZ') {
+                authentication(userName: 'XeiNW4', password: 'RR3XPNBSd2')
+            }
+            repository(url: 'https://repo.rdc.aliyun.com/repository/78416-release-TOhjiY') {
+                authentication(userName: 'XeiNW4', password: 'RR3XPNBSd2')
+            }
+            pom.project {
+                groupId = 'com.chaitai'
+                artifactId = 'web-sorket'
+                version = '1.0.0'
+                licenses {
+                    license {
+                        name 'The Apache Software License, artVersion 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+            }
+        }
+    }
 }
