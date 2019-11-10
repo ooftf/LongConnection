@@ -57,8 +57,8 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 //客户端请求：{"op":"login","args":{"token":"JWT Token"}}
                 Request request = new Request();
-                request.setOp("login");
-                request.getArgs().put("token", "1234564513");
+                request.setOp("test");
+                //request.getArgs().put("token", "1234564513");
 
                 WebSocketService.getInstance().send(request, new Callback() {
                     @Override

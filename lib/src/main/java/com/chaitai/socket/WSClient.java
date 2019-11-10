@@ -14,6 +14,7 @@ import org.java_websocket.handshake.ServerHandshake;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -60,9 +61,10 @@ public class WSClient {
                     // todo 服务端心跳
                 } else {
                     Response response = ARouter.getInstance().navigation(SerializationService.class).parseObject(message, Response.class);
-                    Log.e("Socket-123","callbackMap::"+callbackMap);
-                    Log.e("Socket-123","callbackMap::"+response.getRequestId());
+                    Log.e("Socket-122", "删除前callbackMap::" + callbackMap);
+                    Log.e("Socket-123", "callbackMap::" + response.getRequestId());
                     Call call = callbackMap.get(response.getRequestId());
+                    Log.e("Socket-124", "搜索到" + call);
                     if (call != null) {
                         for (Callback callback : call.callback) {
                             if (response.error == 0) {
@@ -74,7 +76,7 @@ public class WSClient {
                         }
                         callbackMap.remove(response.getRequestId());
                     }
-
+                    Log.e("Socket-125", "删除后callbackMap::" + callbackMap);
                     Call callbacks = channelObserver.get(response.channel);
                     if (callbacks != null) {
                         for (Callback callback : callbacks.callback) {
@@ -87,25 +89,12 @@ public class WSClient {
             @Override
             public void onClose(int code, String reason, boolean remote) {
                 super.onClose(code, reason, remote);
-                for (Map.Entry<String, Call> call : callbackMap.entrySet()) {
-                    for (Callback callback : call.getValue().callback) {
-                        callback.fail(reason);
-                    }
-                }
-                callbackMap.clear();
-
                 //reconnect();
             }
 
             @Override
             public void onError(Exception ex) {
                 super.onError(ex);
-                for (Map.Entry<String, Call> call : callbackMap.entrySet()) {
-                    for (Callback callback : call.getValue().callback) {
-                        callback.fail(ex.getMessage());
-                    }
-                }
-                callbackMap.clear();
                 //reconnect();
             }
         };
@@ -113,7 +102,7 @@ public class WSClient {
         Observable.interval(10, TimeUnit.SECONDS).subscribe(new Consumer<Long>() {
             @Override
             public void accept(Long aLong) throws Exception {
-                Log.e("Socket-interval","callbackMap::" +callbackMap + "  channelObserver::"+channelObserver);
+                Log.e("Socket-interval", "callbackMap::" + callbackMap + "  channelObserver::" + channelObserver);
                 boolean hasObserver = callbackMap.size() > 0 || channelObserver.size() > 0;
                 if (hasObserver) {
                     client.send("ping");
@@ -130,6 +119,7 @@ public class WSClient {
 
     @SuppressLint("CheckResult")
     public void subscribe(final Request request, final Callback callback) {
+
         Completable.complete().subscribeOn(Schedulers.io()).subscribe(new Action() {
             @Override
             public void run() throws Exception {
@@ -221,13 +211,19 @@ public class WSClient {
 
     Map<String, Call> callbackMap = new HashMap<>();
 
-    public void send(final Request request, final Callback callback) {
+    public DisposableCancel send(final Request request, final Callback callback) {
+
         Disposable subscribe = Completable.complete().subscribeOn(Schedulers.io()).subscribe(new Action() {
             @Override
             public void run() throws Exception {
                 sendBlocking(request, callback);
             }
         });
+        return new DisposableCancel(this, genCallbackId(request, callback));
+    }
+
+    private String genCallbackId(Request request, Callback callback) {
+        return callback.hashCode() + callback.toString() + request.getId();
     }
 
 
@@ -241,6 +237,7 @@ public class WSClient {
                 client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
                 callbackMap.put(call.request.getId(), call);
             } else {
+                Log.e("WSClient", "推迟到链接后");
                 postOnConnected.add(new Runnable() {
                     @Override
                     public void run() {
@@ -266,4 +263,23 @@ public class WSClient {
 
     ArrayList<Runnable> postOnLooper = new ArrayList<>();
     ArrayList<Runnable> postOnConnected = new ArrayList<>();
+
+    public void cancel(String id) {
+        for (Map.Entry<String, Call> entry : channelObserver.entrySet()) {
+            Iterator<Callback> iterator = entry.getValue().callback.iterator();
+            while (iterator.hasNext()) {
+                Callback next = iterator.next();
+                if (id.equals(genCallbackId(entry.getValue().request, next))) {
+                    next.fail("cancel");
+                    iterator.remove();
+                    if (entry.getValue().callback.size() == 0) {
+                        channelObserver.remove(entry.getKey());
+                    }
+                    return;
+                }
+            }
+
+
+        }
+    }
 }

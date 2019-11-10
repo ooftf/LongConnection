@@ -1,6 +1,7 @@
 package com.chaitai.socket;
 
 import android.annotation.SuppressLint;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -45,12 +46,14 @@ public class WebSocketService {
     }
 
     private void loginRequest() {
+        Log.e("WebSocketService", "尝试登录");
         Request loginRequest = new Request("login");
         loginRequest.args.put("token", provider.getToken());
 
         hiClient.send(loginRequest, new Callback() {
             @Override
             public void success(String message) {
+                Log.e("WebSocketService", "登录成功");
                 isLogin = true;
                 for (Runnable runnable : postOnLogin) {
                     runnable.run();
@@ -66,11 +69,12 @@ public class WebSocketService {
             @SuppressLint("CheckResult")
             @Override
             public void fail(String message) {
+                Log.e("WebSocketService", "登录失败::"+message);
                 isLogin = false;
                 hiClient.postOnLooper(new Runnable() {
                     @Override
                     public void run() {
-                        if (hiClient.checkConnection()) {
+                        if (hiClient.checkConnection() && !isLogin) {
                             loginRequest();
                         }
                     }
@@ -83,6 +87,7 @@ public class WebSocketService {
         if (checkStatus()) {
             hiClient.send(request, callback);
         } else {
+            Log.e("WebSocketService", "send-推迟到登录后");
             postOnLogin.add(new Runnable() {
                 @Override
                 public void run() {
@@ -109,6 +114,7 @@ public class WebSocketService {
         if (checkStatus()) {
             hiClient.subscribe(request, callback);
         } else {
+            Log.e("WebSocketService", "subscribe::推迟到登录后");
             postOnLogin.add(new Runnable() {
                 @Override
                 public void run() {
