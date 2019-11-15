@@ -1,5 +1,8 @@
 package com.chaitai.socket;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * @author ooftf
  * @email 994749769@qq.com
@@ -8,7 +11,7 @@ package com.chaitai.socket;
 public class Response {
     String event;
     String msg;
-    String channel;
+    List<String> channel = new ArrayList<>();
     int error;
 
     public int getError() {
@@ -35,15 +38,23 @@ public class Response {
         this.msg = msg;
     }
 
-    public String getChannel() {
-        return channel;
-    }
-
-    public void setChannel(String channel) {
+    public Response setChannel(List<String> channel) {
         this.channel = channel;
+        return this;
     }
 
     public String getRequestId() {
-        return event + channel;
+        if (channel.size() > 0) {
+            return event + channel.get(0);
+        }
+        return event;
+    }
+    public String getChannelId() {
+        if (channel.size() > 0) {
+            return channel.get(0);
+        } else {
+            return "";
+        }
+
     }
 }

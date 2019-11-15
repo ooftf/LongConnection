@@ -35,7 +35,12 @@ public class WebSocketService {
     }
 
     private WebSocketService() {
-        hiClient = new WSClient(provider.getUrl());
+        hiClient = new WSClient(provider.getUrl()) {
+            @Override
+            protected boolean isNeedConnection() {
+                return super.isNeedConnection() || postOnLogin.size() > 0;
+            }
+        };
         hiClient.addOpenListener(new Runnable() {
             @Override
             public void run() {
@@ -62,14 +67,24 @@ public class WebSocketService {
 
                 for (Map.Entry<String, Call> entry : hiClient.channelObserver.entrySet()) {
                     Call value = entry.getValue();
+                    Log.e("WebSocketService", "登录后恢复subscribe::" + value.request.getId());
                     subscribe(value.request, null);
+                }
+
+                for (Map.Entry<String, Call> entry : hiClient.callbackMap.entrySet()) {
+                    Call value = entry.getValue();
+                    if ("login".equals(value.request.getOp())) {
+                        continue;
+                    }
+                    Log.e("WebSocketService", "登录后恢复send::" + value.request.getId());
+                    send(value.request, null);
                 }
             }
 
             @SuppressLint("CheckResult")
             @Override
             public void fail(String message) {
-                Log.e("WebSocketService", "登录失败::"+message);
+                Log.e("WebSocketService", "登录失败::" + message);
                 isLogin = false;
                 hiClient.postOnLooper(new Runnable() {
                     @Override
@@ -114,19 +129,20 @@ public class WebSocketService {
         if (checkStatus()) {
             hiClient.subscribe(request, callback);
         } else {
-            Log.e("WebSocketService", "subscribe::推迟到登录后");
+            Log.e("WebSocketService", "subscribe::" + request.getId() + "::推迟到登录后");
             postOnLogin.add(new Runnable() {
                 @Override
                 public void run() {
+                    Log.e("WebSocketService", "subscribe::已登录执行::" + request.getId());
                     subscribe(request, callback);
                 }
             });
         }
     }
 
-    public void unSubscribe(Request request, Callback callback) {
+    public void unsubscribe(Request request, Callback callback) {
         request.setOp("unsubscribe");
-        hiClient.unSubscribe(request, callback);
+        hiClient.unsubscribe(request, callback);
     }
 
     ArrayList<Runnable> postOnLogin = new ArrayList<>();

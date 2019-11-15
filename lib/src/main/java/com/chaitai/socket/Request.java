@@ -5,10 +5,15 @@ import androidx.annotation.NonNull;
 import com.alibaba.android.arouter.facade.service.SerializationService;
 import com.alibaba.android.arouter.launcher.ARouter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
+ *
+ * 暂时只支持一次订阅一个channel
+ *
  * @author ooftf
  * @email 994749769@qq.com
  * @date 2019/11/7
@@ -16,6 +21,7 @@ import java.util.Map;
 public class Request {
     String op;
     Map<String, String> args = new HashMap<>();
+    List<String> channel = new ArrayList<>();
 
     public Request() {
     }
@@ -26,7 +32,7 @@ public class Request {
 
     public Request(String op, String channel) {
         this.op = op;
-        this.args.put(WSClient.CHANNEL, channel);
+        this.channel.add(channel);
     }
 
     public String getOp() {
@@ -37,8 +43,20 @@ public class Request {
         this.op = op;
         return this;
     }
+
+    public String getChannelId() {
+        if (channel.size() > 0) {
+            return channel.get(0);
+        } else {
+            return "";
+        }
+
+    }
+
+
     public Request setChannel(String channel) {
-        this.args.put(WSClient.CHANNEL, channel);
+        this.channel.clear();
+        this.channel.add(channel);
         return this;
     }
 
@@ -54,6 +72,11 @@ public class Request {
     }
 
     public String getId() {
-        return op + args.get(WSClient.CHANNEL);
+        if (channel.size() > 0) {
+            return op + channel.get(0);
+        }
+        return op;
     }
+
+
 }

@@ -1,10 +1,13 @@
 package com.chaitai.socket;
 
-public class DisposableCancel {
+/**
+ * @author 99474
+ */
+public class DisposableConsole {
     WSClient client;
     String id;
 
-    public DisposableCancel(WSClient client, String id) {
+    public DisposableConsole(WSClient client, String id) {
         this.client = client;
         this.id = id;
     }
