@@ -60,11 +60,6 @@ public class WebSocketService {
             public void success(String message) {
                 Log.e("WebSocketService", "登录成功");
                 isLogin = true;
-                for (Runnable runnable : postOnLogin) {
-                    runnable.run();
-                }
-                postOnLogin.clear();
-
                 for (Map.Entry<String, Call> entry : hiClient.channelObserver.entrySet()) {
                     Call value = entry.getValue();
                     Log.e("WebSocketService", "登录后恢复subscribe::" + value.request.getId());
@@ -79,6 +74,11 @@ public class WebSocketService {
                     Log.e("WebSocketService", "登录后恢复send::" + value.request.getId());
                     send(value.request, null);
                 }
+
+                for (Runnable runnable : postOnLogin) {
+                    runnable.run();
+                }
+                postOnLogin.clear();
             }
 
             @SuppressLint("CheckResult")
