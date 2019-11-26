@@ -40,19 +40,19 @@ public class WebSocketClientWapper extends WebSocketClient {
     @CallSuper
     @Override
     public void onOpen(ServerHandshake handshakedata) {
-        Log.e("Socket", "onOpen");
+        LogUtil.e("Socket", "onOpen");
     }
 
     @CallSuper
     @Override
     public void onMessage(String message) {
-        Log.e("Socket", "onMessage::" + message);
+        LogUtil.e("Socket", "onMessage::" + message);
     }
 
     @CallSuper
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        Log.e("Socket", "onClose::" + code + "-" + "reason" + "-" + remote);
+        LogUtil.e("Socket", "onClose::" + code + "-" + "reason" + "-" + remote);
     }
 
     @CallSuper
@@ -64,7 +64,7 @@ public class WebSocketClientWapper extends WebSocketClient {
 
     @Override
     public void send(String text) {
-        Log.e("Socket", "send::" + text);
+        LogUtil.e("Socket", "send::" + text);
         super.send(text);
     }
 }

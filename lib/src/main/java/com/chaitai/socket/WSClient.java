@@ -2,7 +2,6 @@ package com.chaitai.socket;
 
 import android.annotation.SuppressLint;
 import android.text.TextUtils;
-import android.util.Log;
 
 import com.alibaba.android.arouter.facade.service.SerializationService;
 import com.alibaba.android.arouter.launcher.ARouter;
@@ -27,7 +26,6 @@ import io.reactivex.functions.Consumer;
  * @date 2019/11/7
  */
 public class WSClient {
-    public static final String CHANNEL = "channel";
     WebSocketClient client;
     /**
      * 对订阅后事件的监听者
@@ -41,6 +39,14 @@ public class WSClient {
      * 监听  连接打开
      */
     ArrayList<Runnable> openListener = new ArrayList<>();
+    /**
+     * 监听  连接打开
+     */
+    ArrayList<Runnable> closeListener = new ArrayList<>();
+    /**
+     * 监听  连接打开
+     */
+    ArrayList<Runnable> errorListener = new ArrayList<>();
     /**
      * 将事件发送到 轮询器中
      */
@@ -77,10 +83,10 @@ public class WSClient {
                     // todo 服务端心跳
                 } else {
                     Response response = ARouter.getInstance().navigation(SerializationService.class).parseObject(message, Response.class);
-                    Log.e("Socket-122", "删除前callbackMap::" + callbackMap);
-                    Log.e("Socket-123", "callbackMap::" + response.getRequestId());
+                    LogUtil.e("Socket-122", "删除前callbackMap::" + callbackMap);
+                    LogUtil.e("Socket-123", "callbackMap::" + response.getRequestId());
                     Call call = callbackMap.get(response.getRequestId());
-                    Log.e("Socket-124", "搜索到" + call);
+                    LogUtil.e("Socket-124", "搜索到" + call);
                     if (call != null) {
                         for (Callback callback : call.callback) {
                             if (callback == null) {
@@ -95,7 +101,7 @@ public class WSClient {
                         }
                         callbackMap.remove(response.getRequestId());
                     }
-                    Log.e("Socket-125", "删除后callbackMap::" + callbackMap);
+                    LogUtil.e("Socket-125", "删除后callbackMap::" + callbackMap);
                     Call callbacks = channelObserver.get(response.getChannelId());
                     if (callbacks != null) {
                         for (Callback callback : callbacks.callback) {
@@ -111,6 +117,9 @@ public class WSClient {
             @Override
             public void onClose(int code, String reason, boolean remote) {
                 super.onClose(code, reason, remote);
+                for (Runnable runnable : closeListener) {
+                    runnable.run();
+                }
                 for (Call call : callbackMap.values()) {
                     call.needSend = true;
                 }
@@ -124,6 +133,9 @@ public class WSClient {
             @Override
             public void onError(Exception ex) {
                 super.onError(ex);
+                for (Runnable runnable : errorListener) {
+                    runnable.run();
+                }
                 for (Call call : callbackMap.values()) {
                     call.needSend = true;
                 }
@@ -138,7 +150,7 @@ public class WSClient {
         Observable.interval(10, TimeUnit.SECONDS).subscribe(new Consumer<Long>() {
             @Override
             public void accept(Long aLong) throws Exception {
-                Log.e("Socket-interval", "callbackMap::" + callbackMap + "  channelObserver::" + channelObserver);
+                LogUtil.e("Socket-interval", "callbackMap::" + callbackMap + "  channelObserver::" + channelObserver);
                 boolean hasObserver = isNeedConnection();
                 if (hasObserver) {
                     if (checkConnection()) {
@@ -200,23 +212,31 @@ public class WSClient {
 
 
     public boolean checkConnection() {
-        Log.e("Socket-checkConnection", "checkConnection" + "  isClosed::" + client.isClosed() + "   client.isOpen()::" + client.isOpen());
+        LogUtil.e("Socket-checkConnection", "checkConnection" + "  isClosed::" + client.isClosed() + "   client.isOpen()::" + client.isOpen());
         if (client.isClosed()) {
             try {
                 client.reconnect();
-                return false;
             } catch (Exception e) {
+                try {
+                    client.connect();
+                } catch (Exception e1) {
+                    e.printStackTrace();
+                }
                 e.printStackTrace();
-                return false;
             }
+            return false;
         } else if (!client.isOpen()) {
             try {
                 client.connect();
-                return false;
             } catch (Exception e) {
+                try {
+                    client.reconnect();
+                } catch (Exception e1) {
+                    e.printStackTrace();
+                }
                 e.printStackTrace();
-                return false;
             }
+            return false;
         } else if (client.isClosing()) {
             return false;
         }
@@ -269,10 +289,23 @@ public class WSClient {
                 call = new Call();
                 call.request = request;
                 call.callback.add(callback);
-                client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
-                callbackMap.put(call.request.getId(), call);
+                try {
+                    client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
+                    callbackMap.put(call.request.getId(), call);
+                } catch (Exception e) {
+                    if (!WebSocketService.OP_LOGIN.equals(request.getOp())) {
+                        throw e;
+                    } else {
+                        postOnConnected.add(new Runnable() {
+                            @Override
+                            public void run() {
+                                send(request, callback);
+                            }
+                        });
+                    }
+                }
             } else {
-                Log.e("WSClient", "Socket未连接，推迟到连接后");
+                LogUtil.e("WSClient", "Socket未连接，推迟到连接后");
                 postOnConnected.add(new Runnable() {
                     @Override
                     public void run() {
@@ -294,8 +327,24 @@ public class WSClient {
         openListener.add(runnable);
     }
 
+    public void addCloseListener(Runnable runnable) {
+        closeListener.add(runnable);
+    }
+
+    public void addErrorListener(Runnable runnable) {
+        errorListener.add(runnable);
+    }
+
     public void removeOpenListener(Runnable runnable) {
         openListener.remove(runnable);
+    }
+
+    public void removeCloseListener(Runnable runnable) {
+        closeListener.remove(runnable);
+    }
+
+    public void removeErrorListener(Runnable runnable) {
+        errorListener.remove(runnable);
     }
 
     public void postOnLooper(Runnable runnable) {
