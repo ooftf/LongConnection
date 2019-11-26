@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.util.Log;
 
 import java.util.ArrayList;
-import java.util.Map;
 
 /**
  * @author ooftf
@@ -27,8 +26,6 @@ public class WebSocketService {
     }
 
     WSClient hiClient;
-
-    boolean isLogin = false;
     private static ISocketConfigProvider provider;
 
     public static void init(ISocketConfigProvider provider, boolean debug) {
@@ -42,53 +39,50 @@ public class WebSocketService {
             protected boolean isNeedConnection() {
                 return super.isNeedConnection() || postOnLogin.size() > 0;
             }
+
+            @Override
+            public void postRequest(final Request request, final Callback callback) {
+                if (request.isNeedLogin()) {
+                    postOnLogin(new Runnable() {
+                        @Override
+                        public void run() {
+                            send(request, callback);
+                        }
+                    });
+                } else {
+                    hiClient.postOnConnected(new Runnable() {
+                        @Override
+                        public void run() {
+                            send(request, callback);
+                        }
+                    });
+                }
+            }
+
+
         };
         hiClient.addOpenListener(new Runnable() {
             @Override
             public void run() {
-                isLogin = false;
                 loginRequest();
             }
         });
-        hiClient.addCloseListener(new Runnable() {
-            @Override
-            public void run() {
-                isLogin = false;
-            }
-        });
-     /*   hiClient.addErrorListener(new Runnable() {
-            @Override
-            public void run() {
-                isLogin = false;
-            }
-        });*/
     }
 
     private void loginRequest() {
+        if (hiClient.isLogin()) {
+            return;
+        }
         LogUtil.e("WebSocketService", "尝试登录");
         Request loginRequest = new Request("login");
+        loginRequest.setNeedLogin(false);
         loginRequest.args.put("token", provider.getToken());
 
         hiClient.send(loginRequest, new Callback() {
             @Override
             public void success(String message) {
                 LogUtil.e("WebSocketService", "登录成功");
-                isLogin = true;
-                for (Map.Entry<String, Call> entry : hiClient.channelObserver.entrySet()) {
-                    Call value = entry.getValue();
-                    Log.e("WebSocketService", "登录后恢复subscribe::" + value.request.getId());
-                    subscribe(value.request, null);
-                }
-
-                for (Map.Entry<String, Call> entry : hiClient.callbackMap.entrySet()) {
-                    Call value = entry.getValue();
-                    if (OP_LOGIN.equals(value.request.getOp())) {
-                        continue;
-                    }
-                    LogUtil.e("WebSocketService", "登录后恢复send::" + value.request.getId());
-                    send(value.request, null);
-                }
-
+                hiClient.setLogin(true);
                 for (Runnable runnable : postOnLogin) {
                     runnable.run();
                 }
@@ -99,13 +93,11 @@ public class WebSocketService {
             @Override
             public void fail(String message) {
                 Log.e("WebSocketService", "登录失败::" + message);
-                isLogin = false;
+                hiClient.setLogin(false);
                 hiClient.postOnLooper(new Runnable() {
                     @Override
                     public void run() {
-                        if (hiClient.checkConnection() && !isLogin) {
-                            loginRequest();
-                        }
+                        loginRequest();
                     }
                 });
             }
@@ -113,54 +105,16 @@ public class WebSocketService {
     }
 
     public void send(final Request request, final Callback callback) {
-        if (checkStatus()) {
-            try {
-                hiClient.send(request, callback);
-            } catch (Exception e) {
-                postOnLogin.add(new Runnable() {
-                    @Override
-                    public void run() {
-                        send(request, callback);
-                    }
-                });
-            }
-        } else {
-            LogUtil.e("WebSocketService", "send-推迟到登录后");
-            postOnLogin.add(new Runnable() {
-                @Override
-                public void run() {
-                    send(request, callback);
-                }
-            });
-        }
-
+        hiClient.send(request, callback);
     }
 
-    boolean checkStatus() {
-        if (!hiClient.checkConnection()) {
-            return false;
-        }
-        if (!isLogin) {
-            return false;
-        }
-
-        return true;
+    void postOnLogin(Runnable runnable) {
+        postOnLogin.add(runnable);
     }
 
     public void subscribe(final Request request, final Callback callback) {
         request.setOp("subscribe");
-        if (checkStatus()) {
-            hiClient.subscribe(request, callback);
-        } else {
-            LogUtil.e("WebSocketService", "subscribe::" + request.getId() + "::推迟到登录后");
-            postOnLogin.add(new Runnable() {
-                @Override
-                public void run() {
-                    Log.e("WebSocketService", "subscribe::已登录执行::" + request.getId());
-                    subscribe(request, callback);
-                }
-            });
-        }
+        hiClient.subscribe(request, callback);
     }
 
     public void unsubscribe(Request request, Callback callback) {

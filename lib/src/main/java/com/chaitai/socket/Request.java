@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 
 /**
- *
  * 暂时只支持一次订阅一个channel
  *
  * @author ooftf
@@ -19,9 +18,11 @@ import java.util.Map;
  * @date 2019/11/7
  */
 public class Request {
+    private boolean needLogin = true;
     String op;
     Map<String, String> args = new HashMap<>();
     List<String> channel = new ArrayList<>();
+
 
     public Request() {
     }
@@ -41,6 +42,15 @@ public class Request {
 
     public Request setOp(String op) {
         this.op = op;
+        return this;
+    }
+
+    public boolean isNeedLogin() {
+        return needLogin;
+    }
+
+    public Request setNeedLogin(boolean needLogin) {
+        this.needLogin = needLogin;
         return this;
     }
 

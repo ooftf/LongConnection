@@ -2,6 +2,7 @@ package com.chaitai.socket;
 
 import android.annotation.SuppressLint;
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.alibaba.android.arouter.facade.service.SerializationService;
 import com.alibaba.android.arouter.launcher.ARouter;
@@ -25,36 +26,38 @@ import io.reactivex.functions.Consumer;
  * @email 994749769@qq.com
  * @date 2019/11/7
  */
-public class WSClient {
+public abstract class WSClient {
+    public static final String PONG = "pong";
+    private boolean isLogin = false;
     WebSocketClient client;
     /**
      * 对订阅后事件的监听者
      */
-    HashMap<String, Call> channelObserver = new HashMap<>();
+    private HashMap<String, Call> channelObserver = new HashMap<>();
     /**
      * 发送请求事件响应的监听者
      */
-    Map<String, Call> callbackMap = new HashMap<>();
+    private Map<String, Call> callbackMap = new HashMap<>();
     /**
      * 监听  连接打开
      */
-    ArrayList<Runnable> openListener = new ArrayList<>();
+    private ArrayList<Runnable> openListener = new ArrayList<>();
     /**
      * 监听  连接打开
      */
-    ArrayList<Runnable> closeListener = new ArrayList<>();
+    private ArrayList<Runnable> closeListener = new ArrayList<>();
     /**
      * 监听  连接打开
      */
-    ArrayList<Runnable> errorListener = new ArrayList<>();
+    private ArrayList<Runnable> errorListener = new ArrayList<>();
     /**
      * 将事件发送到 轮询器中
      */
-    ArrayList<Runnable> postOnLooper = new ArrayList<>();
+    private ArrayList<Runnable> postOnLooper = new ArrayList<>();
     /**
      * 将事件发送到连接成功
      */
-    ArrayList<Runnable> postOnConnected = new ArrayList<>();
+    private ArrayList<Runnable> postOnConnected = new ArrayList<>();
 
     @SuppressLint("CheckResult")
     public WSClient(String url) {
@@ -66,6 +69,7 @@ public class WSClient {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
                 super.onOpen(handshakedata);
+                restoreRequest();
                 for (Runnable runnable : openListener) {
                     runnable.run();
                 }
@@ -79,7 +83,7 @@ public class WSClient {
             public void onMessage(String message) {
                 super.onMessage(message);
 
-                if (message.equals("pong")) {
+                if (PONG.equals(message)) {
                     // todo 服务端心跳
                 } else {
                     Response response = ARouter.getInstance().navigation(SerializationService.class).parseObject(message, Response.class);
@@ -88,7 +92,7 @@ public class WSClient {
                     Call call = callbackMap.get(response.getRequestId());
                     LogUtil.e("Socket-124", "搜索到" + call);
                     if (call != null) {
-                        for (Callback callback : call.callback) {
+                        for (Callback callback : call.getCallbacks()) {
                             if (callback == null) {
                                 continue;
                             }
@@ -104,7 +108,7 @@ public class WSClient {
                     LogUtil.e("Socket-125", "删除后callbackMap::" + callbackMap);
                     Call callbacks = channelObserver.get(response.getChannelId());
                     if (callbacks != null) {
-                        for (Callback callback : callbacks.callback) {
+                        for (Callback callback : callbacks.getCallbacks()) {
                             if (callback == null) {
                                 continue;
                             }
@@ -117,31 +121,20 @@ public class WSClient {
             @Override
             public void onClose(int code, String reason, boolean remote) {
                 super.onClose(code, reason, remote);
+                isLogin = false;
                 for (Runnable runnable : closeListener) {
                     runnable.run();
                 }
-                for (Call call : callbackMap.values()) {
-                    call.needSend = true;
-                }
 
-                for (Call call : channelObserver.values()) {
-                    call.needSend = true;
-                }
                 //reconnect();
             }
 
             @Override
             public void onError(Exception ex) {
                 super.onError(ex);
+                isLogin = false;
                 for (Runnable runnable : errorListener) {
                     runnable.run();
-                }
-                for (Call call : callbackMap.values()) {
-                    call.needSend = true;
-                }
-
-                for (Call call : channelObserver.values()) {
-                    call.needSend = true;
                 }
                 //reconnect();
             }
@@ -165,21 +158,18 @@ public class WSClient {
         });
     }
 
+    public WSClient setLogin(boolean login) {
+        isLogin = login;
+        return this;
+    }
+
+    public boolean isLogin() {
+        return isLogin;
+    }
+
     protected boolean isNeedConnection() {
         return callbackMap.size() > 0 || channelObserver.size() > 0;
     }
-
-
-   /* @SuppressLint("CheckResult")
-    public void subscribe(final Request request, final Callback callback) {
-
-        Completable.complete().subscribeOn(Schedulers.io()).subscribe(new Action() {
-            @Override
-            public void run() throws Exception {
-                subscribeBlocking(request, callback);
-            }
-        });
-    }*/
 
     public void subscribe(final Request request, final Callback callback) {
         final String channel = request.getChannelId();
@@ -197,7 +187,7 @@ public class WSClient {
                     callbacks.request = request;
                 }
                 if (callback != null) {
-                    callbacks.callback.add(callback);
+                    callbacks.addCallback(callback);
                 }
                 WSClient.this.channelObserver.put(channel, callbacks);
             }
@@ -210,31 +200,39 @@ public class WSClient {
 
     }
 
-
+    /**
+     * 检查连接，如果连接有问题，则尝试恢复连接
+     *
+     * @return
+     */
     public boolean checkConnection() {
         LogUtil.e("Socket-checkConnection", "checkConnection" + "  isClosed::" + client.isClosed() + "   client.isOpen()::" + client.isOpen());
         if (client.isClosed()) {
             try {
+                LogUtil.e("尝试重新连接");
                 client.reconnect();
             } catch (Exception e) {
+                e.printStackTrace();
                 try {
+                    LogUtil.e("尝试建立连接");
                     client.connect();
                 } catch (Exception e1) {
                     e.printStackTrace();
                 }
-                e.printStackTrace();
             }
             return false;
         } else if (!client.isOpen()) {
             try {
+                LogUtil.e("尝试建立连接");
                 client.connect();
             } catch (Exception e) {
+                e.printStackTrace();
                 try {
+                    LogUtil.e("尝试重新连接");
                     client.reconnect();
                 } catch (Exception e1) {
                     e.printStackTrace();
                 }
-                e.printStackTrace();
             }
             return false;
         } else if (client.isClosing()) {
@@ -253,8 +251,8 @@ public class WSClient {
         if (call == null) {
             return;
         }
-        call.callback.remove(callback);
-        if (call.callback.size() > 0) {
+        call.getCallbacks().remove(callback);
+        if (call.getCallbacks().size() > 0) {
             return;
         }
 
@@ -286,42 +284,45 @@ public class WSClient {
         Call call = callbackMap.get(request.getId());
         if (call == null) {
             if (checkConnection()) {
-                call = new Call();
-                call.request = request;
-                call.callback.add(callback);
-                try {
-                    client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
-                    callbackMap.put(call.request.getId(), call);
-                } catch (Exception e) {
-                    if (WebSocketService.OP_LOGIN.equals(request.getOp())) {
-                        postOnConnected.add(new Runnable() {
-                            @Override
-                            public void run() {
-                                send(request, callback);
-                            }
-                        });
-                    } else {
-                        throw e;
+                if (request.isNeedLogin() && !isLogin) {
+                    postRequest(request, callback);
+                } else {
+                    call = new Call();
+                    call.request = request;
+                    call.addCallback(callback);
+                    try {
+                        client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
+                        callbackMap.put(call.request.getId(), call);
+                    } catch (Exception e) {
+                        LogUtil.e("发送数据出现异常");
+                        e.printStackTrace();
+                        postRequest(request, callback);
                     }
                 }
             } else {
-                LogUtil.e("WSClient", "Socket未连接，推迟到连接后");
-                postOnConnected.add(new Runnable() {
-                    @Override
-                    public void run() {
-                        send(request, callback);
-                    }
-                });
+                postRequest(request, callback);
             }
         } else {
-            call.callback.add(callback);
-            if (call.needSend) {
-                client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
+            call.addCallback(callback);
+            if (callback == null) {
+                try {
+                    client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
+                } catch (Exception e) {
+                    LogUtil.e("发送数据出现异常");
+                    e.printStackTrace();
+                    postRequest(request, callback);
+                }
+
             }
         }
         return new DisposableConsole(this, genCallbackId(request, callback));
     }
 
+    public abstract void postRequest(Request request, Callback callback);
+
+    public void postOnConnected(Runnable runnable) {
+        postOnConnected.add(runnable);
+    }
 
     public void addOpenListener(Runnable runnable) {
         openListener.add(runnable);
@@ -351,18 +352,31 @@ public class WSClient {
         postOnLooper.add(runnable);
     }
 
+    private void restoreRequest() {
+        for (Map.Entry<String, Call> entry : channelObserver.entrySet()) {
+            Call value = entry.getValue();
+            Log.e("WebSocketService", "恢复subscribe::" + value.request.getId());
+            subscribe(value.request, null);
+        }
+
+        for (Map.Entry<String, Call> entry : callbackMap.entrySet()) {
+            Call value = entry.getValue();
+            LogUtil.e("WebSocketService", "恢复send::" + value.request.getId());
+            send(value.request, null);
+        }
+    }
 
     public void cancel(String id) {
         Iterator<Map.Entry<String, Call>> iteratorMap = channelObserver.entrySet().iterator();
         while (iteratorMap.hasNext()) {
             Map.Entry<String, Call> entry = iteratorMap.next();
-            Iterator<Callback> iterator = entry.getValue().callback.iterator();
+            Iterator<Callback> iterator = entry.getValue().getCallbacks().iterator();
             while (iterator.hasNext()) {
                 Callback next = iterator.next();
                 if (id.equals(genCallbackId(entry.getValue().request, next))) {
                     next.fail("cancel");
                     iterator.remove();
-                    if (entry.getValue().callback.size() == 0) {
+                    if (entry.getValue().getCallbacks().size() == 0) {
                         iteratorMap.remove();
                     }
                     return;

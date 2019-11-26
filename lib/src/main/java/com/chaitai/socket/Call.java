@@ -5,11 +5,22 @@ import androidx.annotation.NonNull;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * 管理请求数据和callback
+ */
 public class Call {
     Request request;
-    Set<Callback> callback = new HashSet<>();
-    String response;
-    boolean needSend = true;
+    private Set<Callback> callbacks = new HashSet<>();
+    public Set<Callback> getCallbacks() {
+        return callbacks;
+    }
+
+    public void addCallback(Callback callback) {
+        if (callback == null) {
+            return;
+        }
+        this.callbacks.add(callback);
+    }
 
     @NonNull
     @Override
