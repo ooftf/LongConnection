@@ -293,15 +293,15 @@ public class WSClient {
                     client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
                     callbackMap.put(call.request.getId(), call);
                 } catch (Exception e) {
-                    if (!WebSocketService.OP_LOGIN.equals(request.getOp())) {
-                        throw e;
-                    } else {
+                    if (WebSocketService.OP_LOGIN.equals(request.getOp())) {
                         postOnConnected.add(new Runnable() {
                             @Override
                             public void run() {
                                 send(request, callback);
                             }
                         });
+                    } else {
+                        throw e;
                     }
                 }
             } else {
