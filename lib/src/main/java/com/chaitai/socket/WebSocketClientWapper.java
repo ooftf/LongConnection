@@ -52,7 +52,7 @@ public class WebSocketClientWapper extends WebSocketClient {
     @CallSuper
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        LogUtil.e("Socket", "onClose::" + code + "-" + "reason" + "-" + remote);
+        LogUtil.e("Socket", "onClose::" + code + "-" + reason + "-" + remote);
     }
 
     @CallSuper
