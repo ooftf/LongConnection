@@ -174,29 +174,42 @@ public abstract class WSClient {
     public void subscribe(final Request request, final Callback callback) {
         final String channel = request.getChannelId();
         if (TextUtils.isEmpty(channel)) {
-            callback.fail("subscribe no channel");
+            if (callback != null) {
+                callback.fail("subscribe no channel");
+            }
             return;
         }
+        if (!channelObserver.containsKey(channel)) {
+            send(request, new Callback() {
+                @Override
+                public void success(String message) {
+                    Call callbacks = channelObserver.get(channel);
+                    if (callbacks == null) {
+                        callbacks = new Call();
+                        callbacks.request = request;
+                    }
+                    if (callback != null) {
+                        callbacks.addCallback(callback);
+                    }
+                    WSClient.this.channelObserver.put(channel, callbacks);
+                }
 
-        send(request, new Callback() {
-            @Override
-            public void success(String message) {
-                Call callbacks = channelObserver.get(channel);
-                if (callbacks == null) {
-                    callbacks = new Call();
-                    callbacks.request = request;
+                @Override
+                public void fail(String message) {
+                    if (callback != null) {
+                        callback.fail(message);
+                    }
                 }
-                if (callback != null) {
-                    callbacks.addCallback(callback);
-                }
-                WSClient.this.channelObserver.put(channel, callbacks);
+            });
+        } else {
+            if (callback == null) {
+                send(request, null);
+            } else {
+                channelObserver.get(channel).addCallback(callback);
             }
 
-            @Override
-            public void fail(String message) {
-                callback.fail(message);
-            }
-        });
+        }
+
 
     }
 
@@ -244,7 +257,9 @@ public abstract class WSClient {
     public void unsubscribe(final Request request, final Callback callback) {
         final String channel = request.getChannelId();
         if (TextUtils.isEmpty(channel)) {
-            callback.fail("subscribe no channel");
+            if (callback != null) {
+                callback.fail("subscribe no channel");
+            }
             return;
         }
         Call call = channelObserver.get(channel);
