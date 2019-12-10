@@ -12,6 +12,7 @@ import java.util.ArrayList;
  */
 public class WebSocketService {
     public static final String OP_LOGIN = "login";
+    public static final String UNSUBSCRIBE = "unsubscribe";
     private static WebSocketService instance;
 
     public static WebSocketService getInstance() {
@@ -76,7 +77,7 @@ public class WebSocketService {
         LogUtil.e("WebSocketService", "尝试登录");
         Request loginRequest = new Request("login");
         loginRequest.setNeedLogin(false);
-        loginRequest.args.put("token", provider.getToken());
+        loginRequest.getArgs().put("token", provider.getToken());
 
         hiClient.send(loginRequest, new Callback() {
             @Override
@@ -117,9 +118,8 @@ public class WebSocketService {
         hiClient.subscribe(request, callback);
     }
 
-    public void unsubscribe(Request request, Callback callback) {
-        request.setOp("unsubscribe");
-        hiClient.unsubscribe(request, callback);
+    public void unsubscribe(String channel, Callback callback) {
+        hiClient.unsubscribe(channel, callback);
     }
 
     ArrayList<Runnable> postOnLogin = new ArrayList<>();

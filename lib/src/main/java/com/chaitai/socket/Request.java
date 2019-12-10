@@ -1,10 +1,5 @@
 package com.chaitai.socket;
 
-import androidx.annotation.NonNull;
-
-import com.alibaba.android.arouter.facade.service.SerializationService;
-import com.alibaba.android.arouter.launcher.ARouter;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,9 +14,9 @@ import java.util.Map;
  */
 public class Request {
     private boolean needLogin = true;
-    String op;
-    Map<String, String> args = new HashMap<>();
-    List<String> channel = new ArrayList<>();
+    private String op;
+    private Map<String, String> args = new HashMap<>();
+    private List<String> channel = new ArrayList<>();
 
 
     public Request() {
@@ -73,19 +68,6 @@ public class Request {
 
     public Map<String, String> getArgs() {
         return args;
-    }
-
-    @NonNull
-    @Override
-    public String toString() {
-        return ARouter.getInstance().navigation(SerializationService.class).object2Json(this);
-    }
-
-    public String getId() {
-        if (channel.size() > 0) {
-            return op + channel.get(0);
-        }
-        return op;
     }
 
 

@@ -43,12 +43,6 @@ public class Response {
         return this;
     }
 
-    public String getRequestId() {
-        if (channel.size() > 0) {
-            return event + channel.get(0);
-        }
-        return event;
-    }
     public String getChannelId() {
         if (channel.size() > 0) {
             return channel.get(0);

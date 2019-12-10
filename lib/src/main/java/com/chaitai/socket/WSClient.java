@@ -2,7 +2,6 @@ package com.chaitai.socket;
 
 import android.annotation.SuppressLint;
 import android.text.TextUtils;
-import android.util.Log;
 
 import com.alibaba.android.arouter.facade.service.SerializationService;
 import com.alibaba.android.arouter.launcher.ARouter;
@@ -15,6 +14,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -33,7 +33,7 @@ public abstract class WSClient {
     /**
      * 对订阅后事件的监听者
      */
-    private HashMap<String, Call> channelObserver = new HashMap<>();
+    private SubscribePool subscribePool = new SubscribePool();
     /**
      * 发送请求事件响应的监听者
      */
@@ -87,10 +87,10 @@ public abstract class WSClient {
                     // todo 服务端心跳
                 } else {
                     Response response = ARouter.getInstance().navigation(SerializationService.class).parseObject(message, Response.class);
-                    LogUtil.e("Socket-122", "删除前callbackMap::" + callbackMap);
-                    LogUtil.e("Socket-123", "callbackMap::" + response.getRequestId());
-                    Call call = callbackMap.get(response.getRequestId());
-                    LogUtil.e("Socket-124", "搜索到" + call);
+                    LogUtil.e("删除前callbackMap::" + callbackMap);
+                    LogUtil.e("收到::" + response.getChannelId());
+                    Call call = callbackMap.get(Call.genRequestId(response));
+                    LogUtil.e("搜索到" + call);
                     if (call != null) {
                         for (Callback callback : call.getCallbacks()) {
                             if (callback == null) {
@@ -103,18 +103,10 @@ public abstract class WSClient {
                             }
 
                         }
-                        callbackMap.remove(response.getRequestId());
+                        callbackMap.remove(Call.genRequestId(response));
                     }
-                    LogUtil.e("Socket-125", "删除后callbackMap::" + callbackMap);
-                    Call callbacks = channelObserver.get(response.getChannelId());
-                    if (callbacks != null) {
-                        for (Callback callback : callbacks.getCallbacks()) {
-                            if (callback == null) {
-                                continue;
-                            }
-                            callback.success(message);
-                        }
-                    }
+
+                    subscribePool.onResponse(response.getChannelId(), message);
                 }
             }
 
@@ -143,7 +135,7 @@ public abstract class WSClient {
         Observable.interval(10, TimeUnit.SECONDS).subscribe(new Consumer<Long>() {
             @Override
             public void accept(Long aLong) throws Exception {
-                LogUtil.e("Socket-interval", "callbackMap::" + callbackMap + "  channelObserver::" + channelObserver);
+                LogUtil.e("Socket-interval", "callbackMap::" + callbackMap + "  channelObserver::" + subscribePool);
                 boolean hasObserver = isNeedConnection();
                 if (hasObserver) {
                     if (checkConnection()) {
@@ -168,7 +160,7 @@ public abstract class WSClient {
     }
 
     protected boolean isNeedConnection() {
-        return callbackMap.size() > 0 || channelObserver.size() > 0;
+        return callbackMap.size() > 0 || !subscribePool.isEmpty();
     }
 
     public void subscribe(final Request request, final Callback callback) {
@@ -179,38 +171,48 @@ public abstract class WSClient {
             }
             return;
         }
-        if (!channelObserver.containsKey(channel)) {
-            send(request, new Callback() {
-                @Override
-                public void success(String message) {
-                    Call callbacks = channelObserver.get(channel);
-                    if (callbacks == null) {
-                        callbacks = new Call();
-                        callbacks.request = request;
-                    }
-                    if (callback != null) {
-                        callbacks.addCallback(callback);
-                    }
-                    WSClient.this.channelObserver.put(channel, callbacks);
-                }
 
-                @Override
-                public void fail(String message) {
-                    if (callback != null) {
-                        callback.fail(message);
-                    }
-                }
-            });
+        Call call = subscribePool.findCallByChannel(request.getChannelId());
+
+        if (call == null) {
+            sendSubscribe(request, callback);
+        } else if (callback == null) {
+            send(request, null);
+        } else if (call.equalsCurrent(request)) {
+            call.addCallback(callback);
         } else {
-            if (callback == null) {
-                send(request, null);
-            } else {
-                channelObserver.get(channel).addCallback(callback);
-            }
-
+            sendSubscribe(request, callback);
         }
 
+    }
 
+    /**
+     * 发送订阅请求
+     *
+     * @param request
+     * @param callback
+     */
+    private void sendSubscribe(final Request request, final Callback callback) {
+        send(request, new Callback() {
+            @Override
+            public void success(String message) {
+                Call call = subscribePool.findCallByChannel(request.getChannelId());
+                if (call == null) {
+                    call = new Call(request);
+                }
+                if (callback != null) {
+                    call.addCallback(callback);
+                }
+                subscribePool.put(call);
+            }
+
+            @Override
+            public void fail(String message) {
+                if (callback != null) {
+                    callback.fail(message);
+                }
+            }
+        });
     }
 
     /**
@@ -254,25 +256,25 @@ public abstract class WSClient {
         return true;
     }
 
-    public void unsubscribe(final Request request, final Callback callback) {
-        final String channel = request.getChannelId();
+    public void unsubscribe(final String channel, final Callback callback) {
         if (TextUtils.isEmpty(channel)) {
             if (callback != null) {
                 callback.fail("subscribe no channel");
             }
             return;
         }
-        Call call = channelObserver.get(channel);
+        Call call = subscribePool.findCallByChannel(channel);
         if (call == null) {
             return;
         }
+
         call.getCallbacks().remove(callback);
-        if (call.getCallbacks().size() > 0) {
+
+        if (!call.getCallbacks().isEmpty()) {
             return;
         }
-
-        channelObserver.remove(channel);
-        send(request, new Callback() {
+        subscribePool.remove(channel);
+        send(new Request(WebSocketService.UNSUBSCRIBE, channel), new Callback() {
             @Override
             public void success(String message) {
 
@@ -285,29 +287,37 @@ public abstract class WSClient {
         });
     }
 
-    private String genCallbackId(Request request, Callback callback) {
+    boolean isEmpty(List<Call> calls) {
+        for (Call call : calls) {
+            if (!call.getCallbacks().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String genCallbackId(String requestId, Callback callback) {
         if (callback == null) {
-            return request.getId();
+            return requestId;
         } else {
-            return callback.hashCode() + callback.toString() + request.getId();
+            return callback.hashCode() + callback.toString() + requestId;
         }
 
     }
 
 
     public DisposableConsole send(final Request request, final Callback callback) {
-        Call call = callbackMap.get(request.getId());
+        Call call = callbackMap.get(Call.genRequestId(request));
         if (call == null) {
             if (checkConnection()) {
                 if (request.isNeedLogin() && !isLogin) {
                     postRequest(request, callback);
                 } else {
-                    call = new Call();
-                    call.request = request;
+                    call = new Call(request);
                     call.addCallback(callback);
                     try {
-                        client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
-                        callbackMap.put(call.request.getId(), call);
+                        client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.getRequestString()));
+                        callbackMap.put(call.getRequestId(), call);
                     } catch (Exception e) {
                         LogUtil.e("发送数据出现异常");
                         e.printStackTrace();
@@ -321,7 +331,7 @@ public abstract class WSClient {
             call.addCallback(callback);
             if (callback == null) {
                 try {
-                    client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.request));
+                    client.send(call.getRequestString());
                 } catch (Exception e) {
                     LogUtil.e("发送数据出现异常");
                     e.printStackTrace();
@@ -330,7 +340,7 @@ public abstract class WSClient {
 
             }
         }
-        return new DisposableConsole(this, genCallbackId(request, callback));
+        return new DisposableConsole(this, genCallbackId(Call.genRequestId(request), callback));
     }
 
     public abstract void postRequest(Request request, Callback callback);
@@ -368,27 +378,22 @@ public abstract class WSClient {
     }
 
     private void restoreRequest() {
-        for (Map.Entry<String, Call> entry : channelObserver.entrySet()) {
-            Call value = entry.getValue();
-            Log.e("WebSocketService", "恢复subscribe::" + value.request.getId());
-            subscribe(value.request, null);
-        }
-
+        subscribePool.restore(this);
         for (Map.Entry<String, Call> entry : callbackMap.entrySet()) {
             Call value = entry.getValue();
-            LogUtil.e("WebSocketService", "恢复send::" + value.request.getId());
-            send(value.request, null);
+            LogUtil.e("WebSocketService", "恢复send::" + value.getRequestId());
+            send(value.newRequest(), null);
         }
     }
 
     public void cancel(String id) {
-        Iterator<Map.Entry<String, Call>> iteratorMap = channelObserver.entrySet().iterator();
+        Iterator<Map.Entry<String, Call>> iteratorMap = subscribePool.getPool().entrySet().iterator();
         while (iteratorMap.hasNext()) {
             Map.Entry<String, Call> entry = iteratorMap.next();
             Iterator<Callback> iterator = entry.getValue().getCallbacks().iterator();
             while (iterator.hasNext()) {
                 Callback next = iterator.next();
-                if (id.equals(genCallbackId(entry.getValue().request, next))) {
+                if (id.equals(genCallbackId(entry.getValue().getRequestId(), next))) {
                     next.fail("cancel");
                     iterator.remove();
                     if (entry.getValue().getCallbacks().size() == 0) {
