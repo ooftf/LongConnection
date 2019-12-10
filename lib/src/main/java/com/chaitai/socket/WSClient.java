@@ -135,7 +135,7 @@ public abstract class WSClient {
         Observable.interval(10, TimeUnit.SECONDS).subscribe(new Consumer<Long>() {
             @Override
             public void accept(Long aLong) throws Exception {
-                LogUtil.e("Socket-interval", requestPool + "  channelObserver::" + subscribePool);
+                LogUtil.e("Socket-interval", requestPool + "&" + subscribePool);
                 boolean hasObserver = isNeedConnection();
                 if (hasObserver) {
                     if (checkConnection()) {
@@ -221,7 +221,7 @@ public abstract class WSClient {
      * @return
      */
     public boolean checkConnection() {
-        LogUtil.e("Socket-checkConnection", "checkConnection" + "  isClosed::" + client.isClosed() + "   client.isOpen()::" + client.isOpen());
+        LogUtil.e("checkConnection" + "&isClosed::" + client.isClosed() + "&isOpen()::" + client.isOpen());
         if (client.isClosed()) {
             try {
                 LogUtil.e("尝试重新连接");
@@ -316,7 +316,7 @@ public abstract class WSClient {
                     call = new Call(request);
                     call.addCallback(callback);
                     try {
-                        client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.getRequestString()));
+                        client.send(call.getRequestString());
                         requestPool.put(call);
                     } catch (Exception e) {
                         LogUtil.e("发送数据出现异常");

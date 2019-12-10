@@ -116,5 +116,20 @@ public class Call {
             this.args = args;
             this.channel.add(channel);
         }
+
+        public String getOp() {
+            return op;
+        }
+
+
+        public Map<String, String> getArgs() {
+            return args;
+        }
+
+
+        public List<String> getChannel() {
+            return channel;
+        }
+
     }
 }
