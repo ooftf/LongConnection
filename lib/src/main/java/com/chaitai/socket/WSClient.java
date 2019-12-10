@@ -37,7 +37,7 @@ public abstract class WSClient {
     /**
      * 发送请求事件响应的监听者
      */
-    private Map<String, Call> callbackMap = new HashMap<>();
+    private RequestPool requestPool = new RequestPool();
     /**
      * 监听  连接打开
      */
@@ -87,9 +87,9 @@ public abstract class WSClient {
                     // todo 服务端心跳
                 } else {
                     Response response = ARouter.getInstance().navigation(SerializationService.class).parseObject(message, Response.class);
-                    LogUtil.e("删除前callbackMap::" + callbackMap);
+                    LogUtil.e("删除前" + requestPool);
                     LogUtil.e("收到::" + response.getChannelId());
-                    Call call = callbackMap.get(Call.genRequestId(response));
+                    Call call = requestPool.findCallByRequestId(Call.genRequestId(response));
                     LogUtil.e("搜索到" + call);
                     if (call != null) {
                         for (Callback callback : call.getCallbacks()) {
@@ -103,7 +103,7 @@ public abstract class WSClient {
                             }
 
                         }
-                        callbackMap.remove(Call.genRequestId(response));
+                        requestPool.remove(Call.genRequestId(response));
                     }
 
                     subscribePool.onResponse(response.getChannelId(), message);
@@ -135,7 +135,7 @@ public abstract class WSClient {
         Observable.interval(10, TimeUnit.SECONDS).subscribe(new Consumer<Long>() {
             @Override
             public void accept(Long aLong) throws Exception {
-                LogUtil.e("Socket-interval", "callbackMap::" + callbackMap + "  channelObserver::" + subscribePool);
+                LogUtil.e("Socket-interval", requestPool + "  channelObserver::" + subscribePool);
                 boolean hasObserver = isNeedConnection();
                 if (hasObserver) {
                     if (checkConnection()) {
@@ -160,7 +160,7 @@ public abstract class WSClient {
     }
 
     protected boolean isNeedConnection() {
-        return callbackMap.size() > 0 || !subscribePool.isEmpty();
+        return !requestPool.isEmpty() || !subscribePool.isEmpty();
     }
 
     public void subscribe(final Request request, final Callback callback) {
@@ -307,7 +307,7 @@ public abstract class WSClient {
 
 
     public DisposableConsole send(final Request request, final Callback callback) {
-        Call call = callbackMap.get(Call.genRequestId(request));
+        Call call = requestPool.findCallByRequestId(Call.genRequestId(request));
         if (call == null) {
             if (checkConnection()) {
                 if (request.isNeedLogin() && !isLogin) {
@@ -317,7 +317,7 @@ public abstract class WSClient {
                     call.addCallback(callback);
                     try {
                         client.send(ARouter.getInstance().navigation(SerializationService.class).object2Json(call.getRequestString()));
-                        callbackMap.put(call.getRequestId(), call);
+                        requestPool.put(call);
                     } catch (Exception e) {
                         LogUtil.e("发送数据出现异常");
                         e.printStackTrace();
@@ -379,11 +379,7 @@ public abstract class WSClient {
 
     private void restoreRequest() {
         subscribePool.restore(this);
-        for (Map.Entry<String, Call> entry : callbackMap.entrySet()) {
-            Call value = entry.getValue();
-            LogUtil.e("WebSocketService", "恢复send::" + value.getRequestId());
-            send(value.newRequest(), null);
-        }
+        requestPool.restore(this);
     }
 
     public void cancel(String id) {

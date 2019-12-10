@@ -83,7 +83,7 @@ public class Call {
     }
 
     String getRequestString() {
-        return ARouter.getInstance().navigation(SerializationService.class).object2Json(new ReqeustStringBean(op, args, channel));
+        return ARouter.getInstance().navigation(SerializationService.class).object2Json(new RequestStringBean(op, args, channel));
     }
 
     String getRequestId() {
@@ -106,12 +106,12 @@ public class Call {
     }
 
     @Keep
-    private class ReqeustStringBean {
+    private class RequestStringBean {
         String op;
-        Map<String, String> args = new HashMap<>();
+        Map<String, String> args;
         List<String> channel = new ArrayList<>();
 
-        public ReqeustStringBean(String op, Map<String, String> args, String channel) {
+        public RequestStringBean(String op, Map<String, String> args, String channel) {
             this.op = op;
             this.args = args;
             this.channel.add(channel);
