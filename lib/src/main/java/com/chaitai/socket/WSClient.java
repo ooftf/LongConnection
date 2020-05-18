@@ -64,7 +64,7 @@ public abstract class WSClient {
 
         URI uri = URI.create(url);
 
-        client = new WebSocketClientWapper(uri, new Draft_6455()) {
+        client = new WebSocketClientWrapper(uri, new Draft_6455()) {
 
             @Override
             public void onOpen(ServerHandshake handshakedata) {
@@ -148,6 +148,11 @@ public abstract class WSClient {
                 postOnLooper.clear();
             }
         });
+    }
+
+
+    public void reconnect() {
+        client.reconnect();
     }
 
     public WSClient setLogin(boolean login) {

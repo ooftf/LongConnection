@@ -1,6 +1,7 @@
 package com.chaitai.socket;
 
 import android.annotation.SuppressLint;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -74,35 +75,46 @@ public class WebSocketService {
         if (hiClient.isLogin()) {
             return;
         }
-        LogUtil.e("WebSocketService", "尝试登录");
-        Request loginRequest = new Request("login");
-        loginRequest.setNeedLogin(false);
-        loginRequest.getArgs().put("token", provider.getToken());
 
-        hiClient.send(loginRequest, new Callback() {
-            @Override
-            public void success(String message) {
-                LogUtil.e("WebSocketService", "登录成功");
-                hiClient.setLogin(true);
-                for (Runnable runnable : postOnLogin) {
-                    runnable.run();
-                }
-                postOnLogin.clear();
-            }
+        if (!TextUtils.isEmpty(provider.getToken())) {
+            LogUtil.e("WebSocketService", "尝试登录");
+            Request loginRequest = new Request("login");
+            loginRequest.setNeedLogin(false);
+            loginRequest.getArgs().put("token", provider.getToken());
 
-            @SuppressLint("CheckResult")
-            @Override
-            public void fail(String message) {
-                Log.e("WebSocketService", "登录失败::" + message);
-                hiClient.setLogin(false);
-                hiClient.postOnLooper(new Runnable() {
-                    @Override
-                    public void run() {
-                        loginRequest();
+            hiClient.send(loginRequest, new Callback() {
+                @Override
+                public void success(String message) {
+                    LogUtil.e("WebSocketService", "登录成功");
+                    hiClient.setLogin(true);
+                    for (Runnable runnable : postOnLogin) {
+                        runnable.run();
                     }
-                });
-            }
-        });
+                    postOnLogin.clear();
+                }
+
+                @SuppressLint("CheckResult")
+                @Override
+                public void fail(String message) {
+                    Log.e("WebSocketService", "登录失败::" + message);
+                    hiClient.setLogin(false);
+                    hiClient.postOnLooper(new Runnable() {
+                        @Override
+                        public void run() {
+                            loginRequest();
+                        }
+                    });
+                }
+            });
+        } else {
+            hiClient.postOnLooper(new Runnable() {
+                @Override
+                public void run() {
+                    loginRequest();
+                }
+            });
+        }
+
     }
 
     public void send(final Request request, final Callback callback) {
@@ -120,6 +132,15 @@ public class WebSocketService {
 
     public void unsubscribe(String channel, Callback callback) {
         hiClient.unsubscribe(channel, callback);
+    }
+
+
+    public void reconnect() {
+        hiClient.reconnect();
+    }
+
+    public void notifyLogin() {
+        loginRequest();
     }
 
     ArrayList<Runnable> postOnLogin = new ArrayList<>();

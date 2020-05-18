@@ -16,24 +16,24 @@ import java.util.Map;
  * @email 994749769@qq.com
  * @date 2019/11/8
  */
-public class WebSocketClientWapper extends WebSocketClient {
-    public WebSocketClientWapper(URI serverUri) {
+public class WebSocketClientWrapper extends WebSocketClient {
+    public WebSocketClientWrapper(URI serverUri) {
         super(serverUri);
     }
 
-    public WebSocketClientWapper(URI serverUri, Draft protocolDraft) {
+    public WebSocketClientWrapper(URI serverUri, Draft protocolDraft) {
         super(serverUri, protocolDraft);
     }
 
-    public WebSocketClientWapper(URI serverUri, Map<String, String> httpHeaders) {
+    public WebSocketClientWrapper(URI serverUri, Map<String, String> httpHeaders) {
         super(serverUri, httpHeaders);
     }
 
-    public WebSocketClientWapper(URI serverUri, Draft protocolDraft, Map<String, String> httpHeaders) {
+    public WebSocketClientWrapper(URI serverUri, Draft protocolDraft, Map<String, String> httpHeaders) {
         super(serverUri, protocolDraft, httpHeaders);
     }
 
-    public WebSocketClientWapper(URI serverUri, Draft protocolDraft, Map<String, String> httpHeaders, int connectTimeout) {
+    public WebSocketClientWrapper(URI serverUri, Draft protocolDraft, Map<String, String> httpHeaders, int connectTimeout) {
         super(serverUri, protocolDraft, httpHeaders, connectTimeout);
     }
 
