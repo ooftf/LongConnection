@@ -12,7 +12,6 @@ import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -139,7 +138,13 @@ public abstract class WSClient {
                 boolean hasObserver = isNeedConnection();
                 if (hasObserver) {
                     if (checkConnection()) {
-                        client.send("ping");
+                        try {
+                            client.send("ping");
+                        } catch (Exception e) {
+                            LogUtil.e("发送新跳异常" + e.toString());
+                            e.printStackTrace();
+                        }
+
                     }
                 }
                 for (Runnable runnable : postOnLooper) {
