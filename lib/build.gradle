@@ -1,15 +1,12 @@
 apply plugin: 'com.android.library'
-apply plugin: 'ooftf-publish'
+apply plugin: 'ooftf-maven'
 android {
-    compileSdkVersion 29
-    buildToolsVersion "29.0.0"
+    compileSdkVersion 30
 
 
     defaultConfig {
         minSdkVersion 19
-        targetSdkVersion 29
-        versionCode 1
-        versionName "1.0"
+        targetSdkVersion 30
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
@@ -24,18 +21,17 @@ android {
 
 }
 publish {
-    groupId = 'com.chaitai'
     artifactId = 'web-sorket'
-    publishVersion = '1.1.4'//-snapshot
+    version = '1.1.4'//-snapshot
 }
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 
-    implementation 'androidx.appcompat:appcompat:1.1.0'
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
     api 'org.java-websocket:Java-WebSocket:1.4.0'
-    api 'io.reactivex.rxjava2:rxjava:2.2.12'
-    api 'com.alibaba:arouter-api:1.5.0'
+    api 'io.reactivex.rxjava2:rxjava:2.2.19'
+    api 'com.alibaba:arouter-api:1.5.1'
 }
